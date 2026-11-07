@@ -78,21 +78,6 @@ print(f"ICIR:    {icir:.4f}")
 
 # Compile out-of-fold predictions and prices for downstream evaluation (e.g. Alphalens in eval.py)
 predictions_df = pd.concat(all_predictions)
-predictions_df['predicted_rank'] = predictions_df.groupby(level='date')['pred'].rank(pct=True)
-prices_df = df_train['close'].unstack('permno')
+predictions_df['predicted_rank'] = predictions_df.groupby(level='date')['pred'].rank(pct=True).astype(float)
+prices_df = df_train['close'].unstack('permno').astype(float)
 
-
-# Cross-validation summary metrics
-mean_ic = np.nanmean(cv_scores)
-std_ic = np.nanstd(cv_scores)
-icir = mean_ic / std_ic if std_ic > 0 else np.nan
-
-print("\n--- Walk-Forward CV Results ---")
-print(f"Mean IC: {mean_ic:.4f}")
-print(f"IC Std:  {std_ic:.4f}")
-print(f"ICIR:    {icir:.4f}")
-
-# Compile out-of-fold predictions and prices for downstream evaluation (e.g. Alphalens in eval.py)
-predictions_df = pd.concat(all_predictions)
-predictions_df['predicted_rank'] = predictions_df.groupby(level='date')['pred'].rank(pct=True)
-prices_df = df_train['close'].unstack('permno')
