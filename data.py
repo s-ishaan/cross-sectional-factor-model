@@ -1,6 +1,5 @@
 import wrds
 import pandas as pd
-import numpy as np
 import os
 
 data_path = 'raw_crsp_data.parquet'
