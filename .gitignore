@@ -1,6 +1,7 @@
-# Python
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 dist/
 build/
@@ -11,25 +12,32 @@ build/
 venv/
 .venv/
 env/
+ENV/
 
-# IDE
+# IDE and OS artifacts
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Data files
+# Data artifacts and commercial datasets (Strictly Excluded)
 *.parquet
 *.csv
+*.tsv
 *.h5
 *.hdf5
+*.feather
+*.log
+data/raw/
+data/processed/
 
-# Jupyter
+# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# Environment variables
+# Environment variables & secrets
 .env
+.env.*
+*.pem
+*.key
