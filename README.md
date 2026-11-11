@@ -109,7 +109,7 @@ $$
 subject to minimum-leaf-population and tree depth constraints:
 
 $$
-n_j \ge N_{\text{min\_child}}, \quad \text{depth}(T_m) \le d_{\max} \quad \forall \, j, m
+n_j \ge N_{\min}, \quad \text{depth}(T_m) \le d_{\max} \quad \forall \, j, m
 $$
 
 where $\lambda$ is the $L_2$ leaf-score regularization coefficient and $\gamma$ is the minimum gain required to accept a split.
