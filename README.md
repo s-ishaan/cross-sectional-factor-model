@@ -58,25 +58,25 @@ To prevent lookahead contamination and model execution feasibility under market 
 
 $$R_{i,t+1 \to t+1+h}^{\text{fwd}} = \frac{I_{i,t+1+h} - I_{i,t+1}}{I_{i,t+1}}$$
 
-Continuous forward returns are discretized cross-sectionally into $K \in \{3, 10\}$ ordinal quantile ranks:
+Continuous forward returns are partitioned cross-sectionally into $K \in \{3, 10\}$ equal-frequency ordinal bins via `pd.qcut`, yielding integer labels:
 
-$$y_{i,t} = \left\lfloor K \cdot \operatorname{QuantileRank}_t\left(R_{i,t+1 \to t+1+h}^{\text{fwd}}\right) \right\rfloor \in \{0, 1, \dots, K-1\}$$
+$$y_{i,t} \in \{0, 1, \dots, K-1\}$$
 
-where $\operatorname{QuantileRank}_t(\cdot) \in [0, 1)$ utilizes deterministic first-occurrence sorting for invariant rank assignment in dense distributions.
+where $y_{i,t} = k$ if and only if $R_{i,t+1 \to t+1+h}^{\text{fwd}}$ falls in the $k$-th quantile of the cross-sectional distribution on date $t$. Rank ties are broken by first-occurrence ordering to guarantee a unique, deterministic label for every observation.
 
 ---
 
 ### 2.4 Regularized Non-Linear Optimization & Objective Function
 
-Model inference utilizes gradient-boosted decision tree ensembles $f(X; \Theta)$ minimizing penalized mean squared error across training observations:
+Model inference utilizes gradient-boosted decision tree ensembles $f(X; \Theta)$ minimizing a regularized mean squared error objective. For tree $m$ with $J_m$ leaves, let $v_j$ denote the optimal scalar output of leaf $j$ and $n_j = |\{(i,t) \in \text{leaf}_j\}|$ the number of training observations routed to that leaf. The full objective is:
 
-$$\mathcal{L}(\Theta) = \sum_{t \in \mathcal{T}_{\text{train}}} \sum_{i \in \mathcal{M}_t} \frac{1}{2}\left(y_{i,t} - \hat{y}_{i,t}\right)^2 + \sum_{m=1}^M \left( \gamma J_m + \frac{1}{2}\lambda \sum_{j=1}^{J_m} w_{mj}^2 \right)$$
+$$\mathcal{L}(\Theta) = \sum_{t \in \mathcal{T}_{\text{train}}} \sum_{i \in \mathcal{M}_t} \frac{1}{2}\left(y_{i,t} - \hat{y}_{i,t}\right)^2 + \sum_{m=1}^M \left( \gamma J_m + \frac{1}{2}\lambda \sum_{j=1}^{J_m} v_j^2 \right)$$
 
-subject to structural constraints:
+subject to minimum-leaf-population and depth constraints:
 
-$$\sum_{i, t \in \text{leaf}_j} 1 \ge N_{\text{min\_child}}, \quad \operatorname{depth}(T_m) \le d_{\max}$$
+$$n_j \ge N_{\text{min\_child}}, \quad \operatorname{depth}(T_m) \le d_{\max} \quad \forall \, j, m$$
 
-where $J_m$ is the leaf count of tree $m$, $w_{mj}$ is the leaf output weight, $\lambda$ is the $L_2$ leaf weight penalization, and $\gamma$ governs complexity penalty per split.
+where $\lambda$ is the $L_2$ leaf-score regularization coefficient and $\gamma$ is the minimum gain required to accept a split (complexity penalty per leaf).
 
 ---
 
@@ -84,17 +84,19 @@ where $J_m$ is the leaf count of tree $m$, $w_{mj}$ is the leaf output weight, $
 
 For expanding-window cross-validation with training indices $\mathcal{T}_{\text{train}}$ and out-of-fold validation indices $\mathcal{T}_{\text{val}}$ where $\min(\mathcal{T}_{\text{val}}) > \max(\mathcal{T}_{\text{train}})$, label leakage arises because forward return target $R_{i,\tau+1 \to \tau+1+h}^{\text{fwd}}$ for $\tau \in [\max(\mathcal{T}_{\text{train}}) - h, \max(\mathcal{T}_{\text{train}})]$ references price observations realized within $\mathcal{T}_{\text{val}}$.
 
-To guarantee absolute orthogonality between training targets and validation features, the training index set is purged:
+To guarantee absolute orthogonality between training targets and validation features, the training index set is purged by dropping all dates whose $h$-day forward return window overlaps with $\mathcal{T}_{\text{val}}$:
 
-$$\mathcal{T}_{\text{train}}^{\text{purged}} = \left\{ t \in \mathcal{T}_{\text{train}} \;\middle|\; t \le \min(\mathcal{T}_{\text{val}}) - (h + 1) \right\}$$
+$$\mathcal{T}_{\text{train}}^{\text{purged}} = \left\{ t \in \mathcal{T}_{\text{train}} \;\middle|\; t \le \min(\mathcal{T}_{\text{val}}) - h \right\}$$
+
+In the implemented 5-fold scheme with $h = 5$, this removes the trailing 5 trading dates from each expanding training window.
 
 ---
 
 ### 2.6 Signal Evaluation: Spearman Information Coefficient & Information Ratio
 
-Signal efficacy is quantified via daily out-of-fold cross-sectional Spearman rank correlation between continuous predictions $\hat{y}_{\cdot,t}$ and realized targets $y_{\cdot,t}$:
+Signal efficacy is quantified via daily out-of-fold cross-sectional Spearman rank correlation between model predictions $\hat{y}_{\cdot,t}$ and realized quantile targets $y_{\cdot,t}$. Because quantile targets contain ties across observations, the Pearson correlation of ranks (the general form) is applied rather than the tied-adjusted shortcut:
 
-$$\rho_t = 1 - \frac{6 \sum_{i \in \mathcal{M}_t} d_{i,t}^2}{N_t(N_t^2 - 1)}, \quad d_{i,t} = \operatorname{Rank}\left(\hat{y}_{i,t}\right) - \operatorname{Rank}\left(y_{i,t}\right)$$
+$$\rho_t = \frac{\sum_{i \in \mathcal{M}_t} \left(\operatorname{Rank}(\hat{y}_{i,t}) - \overline{\operatorname{Rank}(\hat{y}_{\cdot,t})}\right)\left(\operatorname{Rank}(y_{i,t}) - \overline{\operatorname{Rank}(y_{\cdot,t})}\right)}{\sqrt{\sum_{i} \left(\operatorname{Rank}(\hat{y}_{i,t}) - \overline{\operatorname{Rank}(\hat{y}_{\cdot,t})}\right)^2 \sum_{i} \left(\operatorname{Rank}(y_{i,t}) - \overline{\operatorname{Rank}(y_{\cdot,t})}\right)^2}}
 
 Aggregate cross-sectional stability metrics over out-of-fold evaluation days $\mathcal{T}_{\text{eval}}$ are defined as:
 
@@ -108,13 +110,13 @@ $$\text{ICIR} = \frac{\text{IC}}{\sigma_{\text{IC}}}$$
 
 ### 2.7 Portfolio Optimization, Slippage & Market Impact Bounds
 
-Signals are mapped to long/short weights $w_t \in \mathbb{R}^{N_t}$ subject to strict dollar neutrality and unit gross exposure constraints:
+Signals are mapped to long/short weights $w_t \in \mathbb{R}^{N_t}$, where $w_{i,t} > 0$ denotes a long position and $w_{i,t} < 0$ a short position, subject to strict dollar neutrality and unit gross exposure:
 
 $$\mathbf{1}^T w_t = 0, \quad \sum_{i \in \mathcal{M}_t} |w_{i,t}| = 1$$
 
-Rebalancing turnover on date $t$ accounts for passive weight drift induced by asset returns $R_{i,t}$ and portfolio return $R_{p,t}$:
+Rebalancing turnover on date $t$ accounts for passive weight drift induced by asset returns $R_{i,t}$ and portfolio return $R_{p,t-1}$ over the prior period:
 
-$$\Delta w_{i,t} = w_{i,t} - w_{i,t^-} \left(\frac{1 + R_{i,t}}{1 + R_{p,t}}\right)$$
+$$\Delta w_{i,t} = w_{i,t} - w_{i,t-1} \left(\frac{1 + R_{i,t}}{1 + R_{p,t-1}}\right)$$
 
 Total transaction friction $\mathcal{C}_t$ encompasses linear fee drag $c_{\text{bps}}$ and non-linear square-root market impact (Almgren-Chriss / Kyle formulation):
 
@@ -130,7 +132,7 @@ $$R_{p,t}^{\text{net}} = \sum_{i \in \mathcal{M}_t} w_{i,t} R_{i,t+1} - \mathcal
 
 | Variable / Parameter | Mathematical Domain | Description | Value / Constraint |
 |:---|:---|:---|:---|
-| $P_{i,t}$ | $\mathbb{R}$ | Closing price of security $i$ on date $t$ (CRSP `prc`) | Absolute value $\|P\| \ge \$5.00$ at reconstitution |
+| $P_{i,t}$ | $\mathbb{R}^+$ | Closing price of security $i$ on date $t$ (CRSP `prc`) | Absolute value $|P_{i,t}| \ge \$5.00$ at reconstitution |
 | $S_{i,t}$ | $\mathbb{R}^+$ | Shares outstanding in thousands (CRSP `shrout`) | Historical point-in-time count |
 | $\text{shrcd}_{i,t}$ | $\mathbb{N}$ | CRSP share type classification code | $\in \{10, 11\}$ (US common equity) |
 | $\text{exchcd}_{i,t}$ | $\mathbb{N}$ | CRSP primary exchange identifier | $\in \{1, 2, 3\}$ (NYSE, AMEX, NASDAQ) |
@@ -276,17 +278,17 @@ The architecture transitions through disciplined quantitative research, simulati
   - [x] Non-anticipatory forward return target generator with cross-sectional quantile discretization.
   - [x] Purged expanding-window walk-forward cross-validation eliminating forward label contamination.
   - [x] Out-of-fold daily Spearman rank Information Coefficient (IC) and ICIR validation engine.
-  - [x] Quarantined academic baseline with SHA-256 cryptographic integrity manifest.
-  - [x] Automated unit test suite covering universe reconstitution, eligibility filtering, and mid-year delisting mechanics.
+  - [ ] Quarantined academic baseline with SHA-256 cryptographic integrity manifest.
+  - [ ] Automated unit test suite covering universe reconstitution, eligibility filtering, and mid-year delisting mechanics.
 
-- [x] **Phase 2: Transaction Cost, Fee Drag & Execution Slippage Modeling**
-  - [x] Dollar-neutral long/short portfolio construction mapping quantile predictions into dollar weights.
-  - [x] Continuous turnover tracking incorporating price drift adjustment between rebalancing intervals.
-  - [x] Linear transaction cost modeling capturing exchange fees, clearing charges, and broker commissions.
-  - [x] Non-linear square-root market impact modeling parameterized by asset volatility and average daily volume (ADV).
-  - [x] Short borrow fee drag integration across hard-to-borrow and general collateral assets.
-  - [x] Factor tearsheet integration via Alphalens for multi-horizon return attribution (1D, 5D, 10D holding periods).
-  - [x] Synthetic pipeline dry-run harness validating end-to-end memory safety and execution stability.
+- [ ] **Phase 2: Transaction Cost, Fee Drag & Execution Slippage Modeling**
+  - [ ] Dollar-neutral long/short portfolio construction mapping quantile predictions into dollar weights.
+  - [ ] Continuous turnover tracking incorporating price drift adjustment between rebalancing intervals.
+  - [ ] Linear transaction cost modeling capturing exchange fees, clearing charges, and broker commissions.
+  - [ ] Non-linear square-root market impact modeling parameterized by asset volatility and average daily volume (ADV).
+  - [ ] Short borrow fee drag integration across hard-to-borrow and general collateral assets.
+  - [ ] Factor tearsheet integration via Alphalens for multi-horizon return attribution (1D, 5D, 10D holding periods).
+  - [ ] Synthetic pipeline dry-run harness validating end-to-end memory safety and execution stability.
 
 - [ ] **Phase 3: Real-Time Stream Ingestion & Microsecond Latency Profiling**
   - [ ] Async WebSocket direct feed handler for real-time market data ingestion (SIP / direct venue feeds).
