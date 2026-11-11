@@ -10,53 +10,73 @@ This repository provides an institutional-grade quantitative research, feature e
 
 ### 2.1 Point-in-Time Universe Construction & Constituent Dynamics
 
-Survivorship-free universe generation executes on an annual December schedule. On the final trading day of December in year $Y-1$, denoted $T_{\text{recon}}(Y-1)$, an eligibility filter $\mathcal{U}_{T_{\text{recon}}}$ isolates liquid US common operating equities from the global universe $\mathcal{S}$:
+Survivorship-free universe generation executes on an annual December schedule. On the final trading day of December in year $Y-1$ (reconstitution date $T$), an eligibility filter isolates liquid US common operating equities from the global universe $\mathcal{S}$:
 
-$$\mathcal{U}_{T_{\text{recon}}} = \{ i \in \mathcal{S} \mid \text{Eligible}(i, T_{\text{recon}}) = 1 \}$$
+$$
+\mathcal{U}_{T} = \{ i \in \mathcal{S} \mid \text{Eligible}(i, T) = 1 \}
+$$
 
-where security $i$ is eligible if and only if all five pre-ranking hurdles hold simultaneously:
+Constituent eligibility requires all five pre-ranking hurdles to hold simultaneously on reconstitution date $T$:
 
-1. **Share Type**: $\text{shrcd}_{i,T_{\text{recon}}} \in \{10, 11\}$ (US common equity).
-2. **Primary Exchange**: $\text{exchcd}_{i,T_{\text{recon}}} \in \{1, 2, 3\}$ (NYSE, AMEX, NASDAQ).
-3. **Operating Entity**: $\text{siccd}_{i,T_{\text{recon}}} \neq 6798$ (excluding REITs) and $\text{siccd}_{i,T_{\text{recon}}} \notin [6720, 6726]$ (excluding closed-end funds).
-4. **Price Hurdle**: $|P_{i,T_{\text{recon}}}| \ge 5.00 \text{ USD}$ (penny stock exclusion).
-5. **Trading Seasoning**: $\sum_{\tau = T_{\text{recon}} - 251}^{T_{\text{recon}}} \mathbb{I}(R_{i,\tau} \neq \text{NaN}) \ge 252$ (at least 252 active trading sessions in preceding 252 market days).
+| Hurdle | Formal Condition | Description |
+|:---|:---|:---|
+| **Share Type** | $\text{shrcd} \in \{10, 11\}$ | US common equity |
+| **Primary Exchange** | $\text{exchcd} \in \{1, 2, 3\}$ | NYSE, AMEX, or NASDAQ |
+| **Operating Entity** | $\text{siccd} \neq 6798, \; \text{siccd} \notin [6720, 6726]$ | Excludes REITs and closed-end funds |
+| **Price Hurdle** | $\lvert P_T \rvert \ge 5.00$ | Penny stock exclusion (\$5.00 minimum price) |
+| **Seasoning** | $\sum_{\tau = T - 251}^{T} \mathbb{I}(R_\tau \neq \text{NaN}) \ge 252$ | Minimum 252 active trading sessions in trailing year |
 
-Market capitalization on reconstitution date $T_{\text{recon}}$ is defined as:
+Market capitalization on reconstitution date $T$ is computed as:
 
-$$\text{Cap}_{i,T_{\text{recon}}} = |P_{i,T_{\text{recon}}}| \cdot S_{i,T_{\text{recon}}} \cdot 1000$$
+$$
+\text{Cap}_{i,T} = |P_{i,T}| \cdot S_{i,T} \cdot 1000
+$$
 
-Eligible constituents are sorted descending by market capitalization with deterministic tie-breaking on permanent security identifier ($\text{permno}$):
+Eligible constituents are sorted descending by market capitalization with deterministic tie-breaking on permanent security identifier (PERMNO):
 
-$$\mathcal{C}_{Y} = \text{Top}_{N} \left( \left\{ (\text{Cap}_{i,T_{\text{recon}}(Y-1)}, \, -\text{permno}_i) \right\}_{i \in \mathcal{U}_{T_{\text{recon}}}} \right)$$
+$$
+\mathcal{C}_{Y} = \text{arg max}^{(N)}_{i \in \mathcal{U}_{T}} \left( \text{Cap}_{i,T}, \, -\text{permno}_i \right)
+$$
 
-Daily point-in-time universe membership $\mathcal{M}_t$ for trading day $t$ within effective year $Y(t)$ requires constituent membership and active daily price observation:
+Daily point-in-time universe membership requires annual constituent selection and an active daily trading observation:
 
-$$\mathcal{M}_t = \{ i \in \mathcal{C}_{Y(t)} \mid \exists \, P_{i,t} \in \text{CRSP.DSF} \}$$
+$$
+\mathcal{M}_t = \{ i \in \mathcal{C}_{Y(t)} \mid \exists \, P_{i,t} \in \text{CRSP.DSF} \}
+$$
 
-Securities delisting intra-year exit $\mathcal{M}_t$ organically on the delisting effective date $t_{\text{delist}}$, avoiding survivorship distortion and artificial balance sheet replacements.
+Securities delisting intra-year exit the universe panel organically on the delisting effective date, avoiding survivorship distortion and artificial balance sheet replacements.
 
 ---
 
 ### 2.2 Feature Representation & Cross-Sectional Normalization
 
-Let $R_{i,t}$ denote the split- and dividend-adjusted daily total return from CRSP. The continuous cumulative return index $I_{i,t}$ evolves according to:
+Let $R$ denote split- and dividend-adjusted daily total returns from CRSP. The continuous cumulative return index evolves according to:
 
-$$I_{i,t} = I_{i,0} \prod_{\tau=1}^t (1 + R_{i,\tau})$$
+$$
+I_{i,t} = I_{i,0} \prod_{\tau=1}^t (1 + R_{i,\tau})
+$$
 
-For an arbitrary lookback horizon $k \in \mathbb{N}$ (e.g., $k=21$ trading days for 1-month momentum), the raw momentum factor $M_{i,t}^{(k)}$ is computed as:
+For an arbitrary lookback horizon $k \in \mathbb{N}$ (e.g., $k=21$ trading days for 1-month momentum), the raw momentum factor is computed as:
 
-$$M_{i,t}^{(k)} = \frac{I_{i,t}}{I_{i,t-k}} - 1$$
+$$
+M_{i,t}^{(k)} = \frac{I_{i,t}}{I_{i,t-k}} - 1
+$$
 
-To eliminate outlier contamination while preserving rank monotonicities, raw factors undergo cross-sectional two-tailed winsorization per date $t$ at percentiles $p \in \{0.01, 0.99\}$:
+To eliminate outlier contamination while preserving rank monotonicities, raw factors undergo cross-sectional two-tailed winsorization per date $t$ at the 1st and 99th percentiles:
 
-$$\widetilde{M}_{i,t} = \max\left(Q_t(0.01), \; \min\left(M_{i,t}, \; Q_t(0.99)\right)\right)$$
+$$
+\widetilde{M}_{i,t} = \max\left(Q_t(0.01), \; \min\left(M_{i,t}, \; Q_t(0.99)\right)\right)
+$$
 
-where $Q_t(\alpha)$ represents the empirical $\alpha$-quantile of $\{M_{j,t}\}_{j \in \mathcal{M}_t}$. Winsorized values are transformed via cross-sectional Gaussian standardization:
+where $Q_t(\alpha)$ represents the empirical $\alpha$-quantile across active constituents. Cross-sectional Gaussian standardization normalizes winsorized factors:
 
-$$Z_{i,t} = \frac{\widetilde{M}_{i,t} - \mu_t\left(\widetilde{M}_{\cdot,t}\right)}{\sigma_t\left(\widetilde{M}_{\cdot,t}\right)}$$
+$$
+Z_{i,t} = \frac{\widetilde{M}_{i,t} - \mu_t(\widetilde{M}_{\cdot,t})}{\sigma_t(\widetilde{M}_{\cdot,t})}
+$$
 
-where $\mu_t(\cdot)$ and $\sigma_t(\cdot)$ denote cross-sectional mean and sample standard deviation across active universe constituents on date $t$, enforcing $\mathbb{E}_{i \in \mathcal{M}_t}[Z_{i,t}] = 0$ and $\text{Var}_{i \in \mathcal{M}_t}(Z_{i,t}) = 1$.
+$$
+\mathbb{E}_{i \in \mathcal{M}_t}[Z_{i,t}] = 0, \quad \text{Var}_{i \in \mathcal{M}_t}(Z_{i,t}) = 1
+$$
 
 ---
 
@@ -64,37 +84,45 @@ where $\mu_t(\cdot)$ and $\sigma_t(\cdot)$ denote cross-sectional mean and sampl
 
 To prevent lookahead contamination and model execution feasibility under market close auctions, trading signals derived at date $t$ close execute at $t+1$ close, held through $t+1+h$ close (holding horizon $h = 5$ trading days):
 
-$$R_{i,t+1 \to t+1+h}^{\text{fwd}} = \frac{I_{i,t+1+h} - I_{i,t+1}}{I_{i,t+1}}$$
+$$
+R_{i,t+1 \to t+1+h}^{\text{fwd}} = \frac{I_{i,t+1+h} - I_{i,t+1}}{I_{i,t+1}}
+$$
 
 Continuous forward returns are partitioned cross-sectionally into $K \in \{3, 10\}$ equal-frequency ordinal bins via `pd.qcut`, yielding integer labels:
 
-$$y_{i,t} \in \{0, 1, \dots, K-1\}$$
+$$
+y_{i,t} \in \{0, 1, \dots, K-1\}
+$$
 
-where $y_{i,t} = k$ if and only if $R_{i,t+1 \to t+1+h}^{\text{fwd}}$ falls in the $k$-th quantile of the cross-sectional distribution on date $t$. Rank ties are broken by first-occurrence ordering to guarantee a unique, deterministic label for every observation.
+where $y_{i,t} = k$ if and only if forward return falls in quantile $k$ on date $t$. Rank ties are broken by first-occurrence ordering to guarantee deterministic label assignment.
 
 ---
 
 ### 2.4 Regularized Non-Linear Optimization & Objective Function
 
-Model inference utilizes gradient-boosted decision tree ensembles $f(X; \Theta)$ minimizing a regularized mean squared error objective. For tree $m$ with $J_m$ leaves, let $v_j$ denote the optimal scalar output of leaf $j$ and $n_j = |\{(i,t) \in \text{leaf}_j\}|$ the number of training observations routed to that leaf. The full objective is:
+Model inference utilizes gradient-boosted decision tree ensembles $f(X; \Theta)$ minimizing regularized mean squared error across training observations:
 
-$$\mathcal{L}(\Theta) = \sum_{t \in \mathcal{T}_{\text{train}}} \sum_{i \in \mathcal{M}_t} \frac{1}{2}\left(y_{i,t} - \hat{y}_{i,t}\right)^2 + \sum_{m=1}^M \left( \gamma J_m + \frac{1}{2}\lambda \sum_{j=1}^{J_m} v_j^2 \right)$$
+$$
+\mathcal{L}(\Theta) = \sum_{t \in \mathcal{T}_{\text{train}}} \sum_{i \in \mathcal{M}_t} \frac{1}{2}(y_{i,t} - \hat{y}_{i,t})^2 + \sum_{m=1}^M \left( \gamma J_m + \frac{1}{2}\lambda \sum_{j=1}^{J_m} v_j^2 \right)
+$$
 
-subject to minimum-leaf-population and depth constraints:
+subject to minimum-leaf-population and tree depth constraints:
 
-$$n_j \ge N_{\text{min\_child}}, \quad \text{depth}(T_m) \le d_{\max} \quad \forall \, j, m$$
+$$
+n_j \ge N_{\text{min\_child}}, \quad \text{depth}(T_m) \le d_{\max} \quad \forall \, j, m
+$$
 
-where $\lambda$ is the $L_2$ leaf-score regularization coefficient and $\gamma$ is the minimum gain required to accept a split (complexity penalty per leaf).
+where $\lambda$ is the $L_2$ leaf-score regularization coefficient and $\gamma$ is the minimum gain required to accept a split.
 
 ---
 
 ### 2.5 Walk-Forward Validation & Purging Bounds
 
-For expanding-window cross-validation with training indices $\mathcal{T}_{\text{train}}$ and out-of-fold validation indices $\mathcal{T}_{\text{val}}$ where $\min(\mathcal{T}_{\text{val}}) > \max(\mathcal{T}_{\text{train}})$, label leakage arises because forward return target $R_{i,\tau+1 \to \tau+1+h}^{\text{fwd}}$ for $\tau \in [\max(\mathcal{T}_{\text{train}}) - h, \max(\mathcal{T}_{\text{train}})]$ references price observations realized within $\mathcal{T}_{\text{val}}$.
+For expanding-window cross-validation, label leakage occurs when forward return horizons span across split boundaries. To guarantee absolute orthogonality between training targets and validation features, the training index set is purged by dropping all dates whose $h$-day forward return window overlaps validation:
 
-To guarantee absolute orthogonality between training targets and validation features, the training index set is purged by dropping all dates whose $h$-day forward return window overlaps with $\mathcal{T}_{\text{val}}$:
-
-$$\mathcal{T}_{\text{train}}^{\text{purged}} = \{ t \in \mathcal{T}_{\text{train}} \mid t \le \min(\mathcal{T}_{\text{val}}) - h \}$$
+$$
+\mathcal{T}_{\text{train}}^{\text{purged}} = \{ t \in \mathcal{T}_{\text{train}} \mid t \le \min(\mathcal{T}_{\text{val}}) - h \}
+$$
 
 In the implemented 5-fold scheme with $h = 5$, this removes the trailing 5 trading dates from each expanding training window.
 
@@ -102,56 +130,68 @@ In the implemented 5-fold scheme with $h = 5$, this removes the trailing 5 tradi
 
 ### 2.6 Signal Evaluation: Spearman Information Coefficient & Information Ratio
 
-Signal efficacy is quantified via daily out-of-fold cross-sectional Spearman rank correlation between model predictions $\hat{y}_{\cdot,t}$ and realized quantile targets $y_{\cdot,t}$. Because quantile targets contain ties across observations, the Pearson correlation of ranks (the general form) is applied rather than the tied-adjusted shortcut:
+Signal efficacy is quantified via daily out-of-fold cross-sectional Spearman rank correlation between model predictions and realized quantile targets:
 
-$$\rho_t = \frac{\sum_{i \in \mathcal{M}_t} \left(\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t})\right)\left(\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t})\right)}{\sqrt{\sum_{i \in \mathcal{M}_t} \left(\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t})\right)^2 \sum_{i \in \mathcal{M}_t} \left(\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t})\right)^2}}$$
+$$
+\rho_t = \frac{\sum_{i \in \mathcal{M}_t} (\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t}))(\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t}))}{\sqrt{\sum_{i \in \mathcal{M}_t} (\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t}))^2 \sum_{i \in \mathcal{M}_t} (\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t}))^2}}
+$$
 
-Aggregate cross-sectional stability metrics over out-of-fold evaluation days $\mathcal{T}_{\text{eval}}$ are defined as:
+Aggregate cross-sectional stability metrics over out-of-fold evaluation days are defined as:
 
-$$\text{IC} = \frac{1}{|\mathcal{T}_{\text{eval}}|} \sum_{t \in \mathcal{T}_{\text{eval}}} \rho_t$$
+$$
+\text{IC} = \frac{1}{|\mathcal{T}_{\text{eval}}|} \sum_{t \in \mathcal{T}_{\text{eval}}} \rho_t
+$$
 
-$$\sigma_{\text{IC}} = \sqrt{\frac{1}{|\mathcal{T}_{\text{eval}}| - 1} \sum_{t \in \mathcal{T}_{\text{eval}}} (\rho_t - \text{IC})^2}$$
-
-$$\text{ICIR} = \frac{\text{IC}}{\sigma_{\text{IC}}}$$
+$$
+\sigma_{\text{IC}} = \sqrt{\frac{1}{|\mathcal{T}_{\text{eval}}| - 1} \sum_{t \in \mathcal{T}_{\text{eval}}} (\rho_t - \text{IC})^2}, \quad \text{ICIR} = \frac{\text{IC}}{\sigma_{\text{IC}}}
+$$
 
 ---
 
 ### 2.7 Portfolio Optimization, Slippage & Market Impact Bounds
 
-Signals are mapped to long/short weights $w_t \in \mathbb{R}^{N_t}$, where $w_{i,t} > 0$ denotes a long position and $w_{i,t} < 0$ a short position, subject to strict dollar neutrality and unit gross exposure:
+Signals are mapped to long/short weights $w_t \in \mathbb{R}^N$ with long ($w > 0$) and short ($w < 0$) positions, subject to dollar neutrality and unit gross leverage:
 
-$$\mathbf{1}^T w_t = 0, \quad \sum_{i \in \mathcal{M}_t} |w_{i,t}| = 1$$
+$$
+\mathbf{1}^T w_t = 0, \quad \sum_{i \in \mathcal{M}_t} |w_{i,t}| = 1
+$$
 
-Rebalancing turnover on date $t$ accounts for passive weight drift induced by asset returns $R_{i,t}$ and portfolio return $R_{p,t-1}$ over the prior period:
+Rebalancing turnover on date $t$ accounts for passive weight drift induced by asset returns:
 
-$$\Delta w_{i,t} = w_{i,t} - w_{i,t-1} \left(\frac{1 + R_{i,t}}{1 + R_{p,t-1}}\right)$$
+$$
+\Delta w_{i,t} = w_{i,t} - w_{i,t-1} \left(\frac{1 + R_{i,t}}{1 + R_{p,t-1}}\right)
+$$
 
-Total transaction friction $\mathcal{C}_t$ encompasses linear fee drag $c_{\text{bps}}$ and non-linear square-root market impact (Almgren-Chriss / Kyle formulation):
+Total transaction friction encompasses linear fee drag and non-linear square-root market impact:
 
-$$\mathcal{C}_t = \sum_{i \in \mathcal{M}_t} \left( c_{\text{fee}} |\Delta w_{i,t}| + \eta \cdot \sigma_{i,t} \cdot \sqrt{\frac{|\Delta w_{i,t}| \cdot \text{AUM}}{\text{ADV}_{i,t}}} \right)$$
+$$
+\mathcal{C}_t = \sum_{i \in \mathcal{M}_t} \left( c_{\text{fee}} |\Delta w_{i,t}| + \eta \cdot \sigma_{i,t} \cdot \sqrt{\frac{|\Delta w_{i,t}| \cdot \text{AUM}}{\text{ADV}_{i,t}}} \right)
+$$
 
-Net strategy return $R_{p,t}^{\text{net}}$ accounts for gross portfolio return, transaction friction, and short borrow financing fees $b_{i,t}$:
+Net strategy return accounts for gross portfolio return, transaction friction, and short borrow financing fees:
 
-$$R_{p,t}^{\text{net}} = \sum_{i \in \mathcal{M}_t} w_{i,t} R_{i,t+1} - \mathcal{C}_t - \sum_{i \in \mathcal{M}_t: w_{i,t} < 0} b_{i,t} |w_{i,t}|$$
+$$
+R_{p,t}^{\text{net}} = \sum_{i \in \mathcal{M}_t} w_{i,t} R_{i,t+1} - \mathcal{C}_t - \sum_{i \in \mathcal{M}_t: w_{i,t} < 0} b_{i,t} |w_{i,t}|
+$$
 
 ---
 
 ### 2.8 Variable Definitions & Market Constraints
 
-| Variable / Parameter | Mathematical Domain | Description | Value / Constraint |
+| Parameter | Domain | Description | Value / Hurdle |
 |:---|:---|:---|:---|
-| $P_{i,t}$ | $\mathbb{R}^+$ | Closing price of security $i$ on date $t$ (CRSP `prc`) | Absolute hurdle: $\lvert P_{i,t} \rvert \ge 5.00\text{ USD}$ at reconstitution |
-| $S_{i,t}$ | $\mathbb{R}^+$ | Shares outstanding in thousands (CRSP `shrout`) | Historical point-in-time count |
-| $\text{shrcd}_{i,t}$ | $\mathbb{N}$ | CRSP share type classification code | $\in \{10, 11\}$ (US common equity) |
-| $\text{exchcd}_{i,t}$ | $\mathbb{N}$ | CRSP primary exchange identifier | $\in \{1, 2, 3\}$ (NYSE, AMEX, NASDAQ) |
-| $\text{siccd}_{i,t}$ | $\mathbb{N}$ | Standard Industrial Classification code | Excludes REITs (6798) and CEFs (6720–6726) |
-| $H_{i,t}$ | $\mathbb{N}$ | Trailing active trading days over preceding 252 market days | Seasoning threshold $H_{i,t} \ge 252$ |
-| $h$ | $\mathbb{N}$ | Forward investment and trade holding horizon | $h = 5$ trading days |
-| $\text{AUM}$ | $\mathbb{R}^+$ | Portfolio assets under management | Variable institutional baseline |
-| $\text{ADV}_{i,t}$ | $\mathbb{R}^+$ | 21-day median daily traded dollar volume | Liquidity hurdle $\Delta w_{i,t} \cdot \text{AUM} \le 0.015 \cdot \text{ADV}_{i,t}$ |
-| $c_{\text{fee}}$ | $\mathbb{R}^+$ | Linear broker commission, clearing, and SEC exchange fee | $c_{\text{fee}} = 5 \times 10^{-4}$ (5 bps) |
-| $\eta$ | $\mathbb{R}^+$ | Institutional market impact parameter | $\eta = 0.10$ |
-| $b_{i,t}$ | $\mathbb{R}^+$ | Annualized general collateral short borrow fee rate | $b_{i,t} = 0.0050$ (50 bps per annum) |
+| `P_{i,t}` | $\mathbb{R}^+$ | Closing price on date $t$ (CRSP `prc`) | Absolute hurdle: $\lvert P_{i,t} \rvert \ge 5.00\text{ USD}$ at reconstitution |
+| `S_{i,t}` | $\mathbb{R}^+$ | Shares outstanding in thousands (CRSP `shrout`) | Historical point-in-time count |
+| `shrcd` | $\mathbb{N}$ | Share type code | $\{10, 11\}$ (US common equity) |
+| `exchcd` | $\mathbb{N}$ | Exchange code | $\{1, 2, 3\}$ (NYSE, AMEX, NASDAQ) |
+| `siccd` | $\mathbb{N}$ | Industry classification code | Excludes REITs (6798) and CEFs (6720–6726) |
+| `H_{i,t}` | $\mathbb{N}$ | Trailing active days over 252 market days | Seasoning threshold $\ge 252$ |
+| `h` | $\mathbb{N}$ | Forward investment horizon | $h = 5$ trading days |
+| `AUM` | $\mathbb{R}^+$ | Portfolio assets under management | Variable institutional baseline |
+| `ADV_{i,t}` | $\mathbb{R}^+$ | 21-day median daily traded dollar volume | Participation limit $\le 1.5\%$ ADV |
+| `c_{fee}` | $\mathbb{R}^+$ | Linear broker, clearing, and SEC fees | $5 \times 10^{-4}$ (5 bps) |
+| `\eta` | $\mathbb{R}^+$ | Market impact coefficient | $0.10$ |
+| `b_{i,t}` | $\mathbb{R}^+$ | General collateral borrow rate | $50\text{ bps per annum}$ |
 
 ---
 
