@@ -10,9 +10,17 @@ This repository provides an institutional-grade quantitative research, feature e
 
 ### 2.1 Point-in-Time Universe Construction & Constituent Dynamics
 
-Survivorship-free universe generation executes on an annual December schedule. On the final trading day of December in year $Y-1$, denoted $T_{\text{recon}}(Y-1)$, an eligibility filter $\mathcal{U}_{T}$ isolates liquid US common operating equities from the global universe $\mathcal{S}$:
+Survivorship-free universe generation executes on an annual December schedule. On the final trading day of December in year $Y-1$, denoted $T_{\text{recon}}(Y-1)$, an eligibility filter $\mathcal{U}_{T_{\text{recon}}}$ isolates liquid US common operating equities from the global universe $\mathcal{S}$:
 
-$$\mathcal{U}_{T_{\text{recon}}} = \left\{ i \in \mathcal{S} \;\middle|\; \begin{aligned} &\text{shrcd}_{i,T_{\text{recon}}} \in \{10, 11\} \\ &\text{exchcd}_{i,T_{\text{recon}}} \in \{1, 2, 3\} \\ &\text{siccd}_{i,T_{\text{recon}}} \notin \{6798\} \cup [6720, 6726] \\ &|P_{i,T_{\text{recon}}}| \ge \$5.00 \\ &\sum_{\tau = T_{\text{recon}} - 251}^{T_{\text{recon}}} \mathbb{I}(R_{i,\tau} \neq \emptyset) \ge 252 \end{aligned} \right\}$$
+$$\mathcal{U}_{T_{\text{recon}}} = \{ i \in \mathcal{S} \mid \text{Eligible}(i, T_{\text{recon}}) = 1 \}$$
+
+where security $i$ is eligible if and only if all five pre-ranking hurdles hold simultaneously:
+
+1. **Share Type**: $\text{shrcd}_{i,T_{\text{recon}}} \in \{10, 11\}$ (US common equity).
+2. **Primary Exchange**: $\text{exchcd}_{i,T_{\text{recon}}} \in \{1, 2, 3\}$ (NYSE, AMEX, NASDAQ).
+3. **Operating Entity**: $\text{siccd}_{i,T_{\text{recon}}} \neq 6798$ (excluding REITs) and $\text{siccd}_{i,T_{\text{recon}}} \notin [6720, 6726]$ (excluding closed-end funds).
+4. **Price Hurdle**: $|P_{i,T_{\text{recon}}}| \ge 5.00 \text{ USD}$ (penny stock exclusion).
+5. **Trading Seasoning**: $\sum_{\tau = T_{\text{recon}} - 251}^{T_{\text{recon}}} \mathbb{I}(R_{i,\tau} \neq \text{NaN}) \ge 252$ (at least 252 active trading sessions in preceding 252 market days).
 
 Market capitalization on reconstitution date $T_{\text{recon}}$ is defined as:
 
@@ -20,11 +28,11 @@ $$\text{Cap}_{i,T_{\text{recon}}} = |P_{i,T_{\text{recon}}}| \cdot S_{i,T_{\text
 
 Eligible constituents are sorted descending by market capitalization with deterministic tie-breaking on permanent security identifier ($\text{permno}$):
 
-$$\mathcal{C}_{Y} = \operatorname{arg\,top}_{k=N} \left( \text{Cap}_{i,T_{\text{recon}}(Y-1)}, \, -\text{permno}_i \right)$$
+$$\mathcal{C}_{Y} = \text{Top}_{N} \left( \left\{ (\text{Cap}_{i,T_{\text{recon}}(Y-1)}, \, -\text{permno}_i) \right\}_{i \in \mathcal{U}_{T_{\text{recon}}}} \right)$$
 
 Daily point-in-time universe membership $\mathcal{M}_t$ for trading day $t$ within effective year $Y(t)$ requires constituent membership and active daily price observation:
 
-$$\mathcal{M}_t = \left\{ i \in \mathcal{C}_{Y(t)} \;\middle|\; \exists \, P_{i,t} \in \text{CRSP.DSF} \right\}$$
+$$\mathcal{M}_t = \{ i \in \mathcal{C}_{Y(t)} \mid \exists \, P_{i,t} \in \text{CRSP.DSF} \}$$
 
 Securities delisting intra-year exit $\mathcal{M}_t$ organically on the delisting effective date $t_{\text{delist}}$, avoiding survivorship distortion and artificial balance sheet replacements.
 
@@ -48,7 +56,7 @@ where $Q_t(\alpha)$ represents the empirical $\alpha$-quantile of $\{M_{j,t}\}_{
 
 $$Z_{i,t} = \frac{\widetilde{M}_{i,t} - \mu_t\left(\widetilde{M}_{\cdot,t}\right)}{\sigma_t\left(\widetilde{M}_{\cdot,t}\right)}$$
 
-where $\mu_t(\cdot)$ and $\sigma_t(\cdot)$ denote cross-sectional mean and sample standard deviation across active universe constituents on date $t$, enforcing $\mathbb{E}_{i \in \mathcal{M}_t}[Z_{i,t}] = 0$ and $\operatorname{Var}_{i \in \mathcal{M}_t}[Z_{i,t}] = 1$.
+where $\mu_t(\cdot)$ and $\sigma_t(\cdot)$ denote cross-sectional mean and sample standard deviation across active universe constituents on date $t$, enforcing $\mathbb{E}_{i \in \mathcal{M}_t}[Z_{i,t}] = 0$ and $\text{Var}_{i \in \mathcal{M}_t}(Z_{i,t}) = 1$.
 
 ---
 
@@ -74,7 +82,7 @@ $$\mathcal{L}(\Theta) = \sum_{t \in \mathcal{T}_{\text{train}}} \sum_{i \in \mat
 
 subject to minimum-leaf-population and depth constraints:
 
-$$n_j \ge N_{\text{min\_child}}, \quad \operatorname{depth}(T_m) \le d_{\max} \quad \forall \, j, m$$
+$$n_j \ge N_{\text{min\_child}}, \quad \text{depth}(T_m) \le d_{\max} \quad \forall \, j, m$$
 
 where $\lambda$ is the $L_2$ leaf-score regularization coefficient and $\gamma$ is the minimum gain required to accept a split (complexity penalty per leaf).
 
@@ -86,7 +94,7 @@ For expanding-window cross-validation with training indices $\mathcal{T}_{\text{
 
 To guarantee absolute orthogonality between training targets and validation features, the training index set is purged by dropping all dates whose $h$-day forward return window overlaps with $\mathcal{T}_{\text{val}}$:
 
-$$\mathcal{T}_{\text{train}}^{\text{purged}} = \left\{ t \in \mathcal{T}_{\text{train}} \;\middle|\; t \le \min(\mathcal{T}_{\text{val}}) - h \right\}$$
+$$\mathcal{T}_{\text{train}}^{\text{purged}} = \{ t \in \mathcal{T}_{\text{train}} \mid t \le \min(\mathcal{T}_{\text{val}}) - h \}$$
 
 In the implemented 5-fold scheme with $h = 5$, this removes the trailing 5 trading dates from each expanding training window.
 
@@ -96,7 +104,7 @@ In the implemented 5-fold scheme with $h = 5$, this removes the trailing 5 tradi
 
 Signal efficacy is quantified via daily out-of-fold cross-sectional Spearman rank correlation between model predictions $\hat{y}_{\cdot,t}$ and realized quantile targets $y_{\cdot,t}$. Because quantile targets contain ties across observations, the Pearson correlation of ranks (the general form) is applied rather than the tied-adjusted shortcut:
 
-$$\rho_t = \frac{\sum_{i \in \mathcal{M}_t} \left(\operatorname{Rank}(\hat{y}_{i,t}) - \overline{\operatorname{Rank}(\hat{y}_{\cdot,t})}\right)\left(\operatorname{Rank}(y_{i,t}) - \overline{\operatorname{Rank}(y_{\cdot,t})}\right)}{\sqrt{\sum_{i} \left(\operatorname{Rank}(\hat{y}_{i,t}) - \overline{\operatorname{Rank}(\hat{y}_{\cdot,t})}\right)^2 \sum_{i} \left(\operatorname{Rank}(y_{i,t}) - \overline{\operatorname{Rank}(y_{\cdot,t})}\right)^2}}
+$$\rho_t = \frac{\sum_{i \in \mathcal{M}_t} \left(\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t})\right)\left(\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t})\right)}{\sqrt{\sum_{i \in \mathcal{M}_t} \left(\text{Rank}(\hat{y}_{i,t}) - \overline{\text{Rank}}(\hat{y}_{\cdot,t})\right)^2 \sum_{i \in \mathcal{M}_t} \left(\text{Rank}(y_{i,t}) - \overline{\text{Rank}}(y_{\cdot,t})\right)^2}}$$
 
 Aggregate cross-sectional stability metrics over out-of-fold evaluation days $\mathcal{T}_{\text{eval}}$ are defined as:
 
@@ -132,7 +140,7 @@ $$R_{p,t}^{\text{net}} = \sum_{i \in \mathcal{M}_t} w_{i,t} R_{i,t+1} - \mathcal
 
 | Variable / Parameter | Mathematical Domain | Description | Value / Constraint |
 |:---|:---|:---|:---|
-| $P_{i,t}$ | $\mathbb{R}^+$ | Closing price of security $i$ on date $t$ (CRSP `prc`) | Absolute value $|P_{i,t}| \ge \$5.00$ at reconstitution |
+| $P_{i,t}$ | $\mathbb{R}^+$ | Closing price of security $i$ on date $t$ (CRSP `prc`) | Absolute hurdle: $\lvert P_{i,t} \rvert \ge 5.00\text{ USD}$ at reconstitution |
 | $S_{i,t}$ | $\mathbb{R}^+$ | Shares outstanding in thousands (CRSP `shrout`) | Historical point-in-time count |
 | $\text{shrcd}_{i,t}$ | $\mathbb{N}$ | CRSP share type classification code | $\in \{10, 11\}$ (US common equity) |
 | $\text{exchcd}_{i,t}$ | $\mathbb{N}$ | CRSP primary exchange identifier | $\in \{1, 2, 3\}$ (NYSE, AMEX, NASDAQ) |
