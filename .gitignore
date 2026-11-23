@@ -41,3 +41,7 @@ data/processed/
 .env.*
 *.pem
 *.key
+
+
+output/
+test_wrds.py
