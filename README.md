@@ -329,14 +329,14 @@ The architecture transitions through disciplined quantitative research, simulati
   - [ ] Quarantined academic baseline with SHA-256 cryptographic integrity manifest.
   - [ ] Automated unit test suite covering universe reconstitution, eligibility filtering, and mid-year delisting mechanics.
 
-- [ ] **Phase 2: Transaction Cost, Fee Drag & Execution Slippage Modeling**
-  - [ ] Dollar-neutral long/short portfolio construction mapping quantile predictions into dollar weights.
-  - [ ] Continuous turnover tracking incorporating price drift adjustment between rebalancing intervals.
-  - [ ] Linear transaction cost modeling capturing exchange fees, clearing charges, and broker commissions.
-  - [ ] Non-linear square-root market impact modeling parameterized by asset volatility and average daily volume (ADV).
-  - [ ] Short borrow fee drag integration across hard-to-borrow and general collateral assets.
-  - [ ] Factor tearsheet integration via Alphalens for multi-horizon return attribution (1D, 5D, 10D holding periods).
-  - [ ] Synthetic pipeline dry-run harness validating end-to-end memory safety and execution stability.
+- [x] **Phase 2: Transaction Cost, Fee Drag & Execution Slippage Modeling**
+  - [x] Dollar-neutral long/short portfolio construction mapping quantile predictions into dollar weights.
+  - [x] Continuous turnover tracking incorporating price drift adjustment between rebalancing intervals.
+  - [x] Linear transaction cost modeling capturing exchange fees, clearing charges, and broker commissions.
+  - [x] Non-linear square-root market impact modeling parameterized by asset volatility and average daily volume (ADV).
+  - [x] Short borrow fee drag integration across hard-to-borrow and general collateral assets.
+  - [x] Factor tearsheet integration via Alphalens for multi-horizon return attribution (1D, 5D, 10D holding periods).
+  - [x] Synthetic pipeline dry-run harness validating end-to-end memory safety and execution stability.
 
 - [ ] **Phase 3: Real-Time Stream Ingestion & Microsecond Latency Profiling**
   - [ ] Async WebSocket direct feed handler for real-time market data ingestion (SIP / direct venue feeds).
